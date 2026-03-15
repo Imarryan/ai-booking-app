@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      String    @default("user")
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
+}
+
+model Restaurant {
+  id          String    @id @default(cuid())
+  name        String
+  cuisine     String
+  description String
+  address     String
+  city        String
+  rating      Float     @default(0)
+  priceRange  String
+  imageUrl    String    @default("")
+  capacity    Int       @default(50)
+  openTime    String    @default("10:00")
+  closeTime   String    @default("22:00")
+  createdAt   DateTime  @default(now())
+  bookings    Booking[]
+}
+
+model Hotel {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  address     String
+  city        String
+  rating      Float    @default(0)
+  stars       Int      @default(3)
+  imageUrl    String   @default("")
+  amenities   String   @default("")
+  createdAt   DateTime @default(now())
+  rooms       Room[]
+  bookings    Booking[]
+}
+
+model Room {
+  id        String    @id @default(cuid())
+  hotelId   String
+  type      String
+  price     Float
+  capacity  Int       @default(2)
+  available Boolean   @default(true)
+  imageUrl  String    @default("")
+  hotel     Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings  Booking[]
+}
+
+model Booking {
+  id           String      @id @default(cuid())
+  userId       String
+  type         String
+  status       String      @default("confirmed")
+  checkIn      DateTime
+  checkOut     DateTime?
+  guests       Int         @default(1)
+  specialReqs  String      @default("")
+  totalPrice   Float       @default(0)
+  restaurantId String?
+  hotelId      String?
+  roomId       String?
+  createdAt    DateTime    @default(now())
+  user         User        @relation(fields: [userId], references: [id])
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  hotel        Hotel?      @relation(fields: [hotelId], references: [id])
+  room         Room?       @relation(fields: [roomId], references: [id])
+}
