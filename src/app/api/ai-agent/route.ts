@@ -8,42 +8,63 @@ function getOpenAI() {
 
 export async function POST(req: Request) {
   try {
-    const { message, sessionId, context } = await req.json()
+    const { messages, context } = await req.json()
 
-    const hotels = await prisma.hotel.findMany({
-      take: 15,
-      include: { rooms: true },
-    })
-    const restaurants = await prisma.restaurant.findMany({ take: 15 })
+    const hotels = await prisma.hotel.findMany({ take: 40, include: { rooms: true } })
+    const restaurants = await prisma.restaurant.findMany({ take: 20 })
 
-    const systemPrompt = `You are Aria, a luxury AI concierge for India's finest hotels and restaurants booking platform. You are charming, knowledgeable, persuasive and helpful.
+    const systemPrompt = `You are Aria, the world's most charming AI luxury travel concierge for India's finest hotels and restaurants. You speak with warmth, sophistication and genuine enthusiasm.
 
-Your job:
-- Help customers find and book the perfect hotel or restaurant in India
-- Persuade customers by highlighting unique features, deals, and experiences
-- Collect: name, phone number, email, check-in/out dates, number of guests
-- Once you have all details, confirm the booking and include the text BOOKING_CONFIRMED in your response
-- Be warm, elegant and conversational like a 5-star concierge
+YOUR PERSONALITY:
+- Elegant, persuasive, knowledgeable like a 5-star concierge
+- You remember everything the customer tells you
+- You proactively suggest upgrades and special experiences
+- You create urgency naturally ("Only 2 rooms left this weekend!")
+- You paint vivid pictures of experiences ("Imagine waking up to the Arabian Sea...")
 
-Available Hotels: ${JSON.stringify(hotels.map(h => ({ name: h.name, city: h.city, rating: h.rating, stars: h.stars, rooms: h.rooms.map(r => ({ type: r.type, price: r.price })) })))}
-Available Restaurants: ${JSON.stringify(restaurants.map(r => ({ name: r.name, city: r.city, cuisine: r.cuisine, rating: r.rating, priceRange: r.priceRange })))}
+YOUR GOALS:
+1. Understand what the customer wants (city, dates, budget, occasion)
+2. Recommend the PERFECT hotel or restaurant with enthusiasm
+3. Collect: full name, phone number, email, dates, guests count
+4. Once you have ALL details → confirm booking → say [BOOKING_CONFIRMED]
+5. Tell them WhatsApp confirmation is being sent
 
-Current booking context: ${JSON.stringify(context || {})}`
+AVAILABLE HOTELS: ${JSON.stringify(hotels.map(h => ({
+  name: h.name, city: h.city, stars: h.stars, rating: h.rating, amenities: h.amenities,
+  rooms: h.rooms.map(r => ({ type: r.type, price: r.price }))
+})))}
+
+AVAILABLE RESTAURANTS: ${JSON.stringify(restaurants.map(r => ({
+  name: r.name, city: r.city, cuisine: r.cuisine, rating: r.rating, priceRange: r.priceRange
+})))}
+
+BOOKING CONTEXT SO FAR: ${JSON.stringify(context || {})}
+
+RULES:
+- Never be robotic. Always be conversational and warm.
+- Use emojis sparingly but effectively
+- If they seem hesitant, address their concerns and persuade gently
+- Always confirm the booking summary before finalizing
+- When showing prices, always show room types and their per-night prices`
+
+    const chatMessages = Array.isArray(messages)
+      ? [{ role: 'system' as const, content: systemPrompt }, ...messages]
+      : [{ role: 'system' as const, content: systemPrompt }, { role: 'user' as const, content: String(messages || '') }]
 
     const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-4',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message },
-      ],
-      temperature: 0.8,
-      max_tokens: 500,
+      messages: chatMessages,
+      temperature: 0.85,
+      max_tokens: 600,
     })
 
-    const reply = completion.choices[0].message.content
-    const isConfirmed = reply?.includes('BOOKING_CONFIRMED') || false
+    const reply = completion.choices[0].message.content || ''
+    const isConfirmed = reply.includes('[BOOKING_CONFIRMED]')
 
-    return NextResponse.json({ reply, isConfirmed })
+    return NextResponse.json({
+      reply: reply.replace('[BOOKING_CONFIRMED]', ''),
+      isConfirmed,
+    })
   } catch (error: unknown) {
     console.error('AI Agent error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'

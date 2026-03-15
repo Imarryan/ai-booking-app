@@ -1,43 +1,33 @@
 import { NextResponse } from 'next/server'
-import twilio from 'twilio'
 
 export async function POST(req: Request) {
   try {
-    const { phone, name, hotel, checkIn, checkOut, guests } = await req.json()
+    const { name, phone, email, hotel, restaurant, checkIn, checkOut, guests } = await req.json()
+    const property = hotel || restaurant || 'Your Booking'
+    const bookingId = 'LUX' + Date.now().toString().slice(-6)
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID
-    const authToken = process.env.TWILIO_AUTH_TOKEN
-    const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER
+    // Build WhatsApp deep link (no Twilio needed)
+    const whatsappMsg = encodeURIComponent(
+      `🌟 *Booking Confirmed — LuxStay India*\n\n` +
+      `Dear ${name || 'Guest'},\n\n` +
+      `✅ Your booking is confirmed!\n\n` +
+      `🏨 *${property}*\n` +
+      (checkIn ? `📅 Check-in: ${checkIn}\n` : '') +
+      (checkOut ? `📅 Check-out: ${checkOut}\n` : '') +
+      `👥 Guests: ${guests || 1}\n` +
+      `🎫 Booking ID: ${bookingId}\n\n` +
+      `Our concierge will call you within 30 minutes.\n\n` +
+      `Thank you for choosing LuxStay India! 🙏`
+    )
 
-    if (!accountSid || !authToken || !whatsappNumber) {
-      return NextResponse.json(
-        { success: false, error: 'WhatsApp service not configured' },
-        { status: 500 }
-      )
-    }
+    const whatsappUrl = phone ? `https://wa.me/91${phone}?text=${whatsappMsg}` : null
 
-    const client = twilio(accountSid, authToken)
-
-    const message = await client.messages.create({
-      from: `whatsapp:${whatsappNumber}`,
-      to: `whatsapp:+91${phone}`,
-      body: `🏨 *Booking Confirmed!*
-
-Dear ${name},
-
-Your booking has been confirmed!
-
-*${hotel}*
-📅 Check-in: ${checkIn}
-📅 Check-out: ${checkOut}
-👥 Guests: ${guests}
-
-Thank you for choosing us! Our concierge will contact you shortly.
-
-*LuxStay India* 🌟`,
+    return NextResponse.json({
+      success: true,
+      bookingId,
+      whatsappUrl,
+      message: `Booking ${bookingId} confirmed for ${property}`,
     })
-
-    return NextResponse.json({ success: true, messageId: message.sid })
   } catch (error: unknown) {
     console.error('WhatsApp error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
